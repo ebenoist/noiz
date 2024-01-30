@@ -89,7 +89,6 @@ fn create_sine_440() -> Box<dyn AudioUnit64> {
     Box::new(synth)
 }
 
-
 fn write_data<T: SizedSample + FromSample<f64>>(
     output: &mut [T],
     channels: usize,
@@ -110,7 +109,6 @@ fn main() {
     let now = Instant::now();
     let audio_graph = create_sine_440();
     run_output(audio_graph);
-
 
     tauri::Builder::default()
         .manage(Playhead { timer: Mutex::new(now) })
