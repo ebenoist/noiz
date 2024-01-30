@@ -1,4 +1,5 @@
 const { invoke } = window.__TAURI__.tauri;
+import { emit } from '@tauri-apps/api/event'
 
 let playing = false;
 
@@ -19,6 +20,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.querySelector("#play").addEventListener("click", (e) => {
     e.preventDefault();
+    emit('PLAY');
     play();
   });
 });

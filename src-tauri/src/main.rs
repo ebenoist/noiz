@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::time::Instant;
+use std::str::FromStr;
 use std::sync::Mutex;
 use tauri::State;
 use fundsp::hacker::*;
@@ -10,28 +11,58 @@ use cpal::{Device, FromSample, SampleFormat, SizedSample, StreamConfig};
 use fundsp::hacker::{
     hammond_hz, multipass, reverb_stereo, sine, sine_hz, soft_saw_hz, square_hz, wave64, Wave64,
 };
-struct Playhead {
-    timer: Mutex<Instant>
-    // out: Mutex<Wave64>
+
+use tauri::Manager;
+
+struct Store {
+    timer: Mutex<Instant>,
+    playing: Mutex<bool>,
+}
+
+#[derive(Debug, PartialEq)]
+enum Action {
+    Stop,
+    Play,
+    Done,
+    Tick,
+}
+
+impl FromStr for Action {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Action, Self::Err> {
+        match input {
+            "PLAY"  => Ok(Action::Play),
+            "STOP"  => Ok(Action::Stop),
+            "DONE"  => Ok(Action::Done),
+            "TICK" => Ok(Action::Tick),
+            _      => Err(()),
+        }
+    }
 }
 
 #[tauri::command]
-fn play(playing: bool, playhead: State<Playhead>) {
+fn play(playing: bool, playhead: State<Store>) {
     if playing {
         println!("hit play!");
-
         let now = Instant::now();
         // *playhead.out.lock().unwrap() = wave1;
         *playhead.timer.lock().unwrap() = now;
     } else {
         println!("stopping");
     }
+
+    *playhead.playing.lock().unwrap() = playing;
 }
 
 #[tauri::command]
-fn current(playhead: State<Playhead>) -> String {
+fn current(playhead: State<Store>) -> String {
     let secs = playhead.timer.lock().unwrap().elapsed().as_secs();
-    format!("{}", secs)
+    if *playhead.playing.lock().unwrap() {
+        format!("it's a sine! {}", secs)
+    } else {
+        String::from("stopped")
+    }
 }
 
 fn run_output(audio_graph: Box<dyn AudioUnit64>) {
@@ -111,7 +142,28 @@ fn main() {
     run_output(audio_graph);
 
     tauri::Builder::default()
-        .manage(Playhead { timer: Mutex::new(now) })
+        .setup(|app| {
+            app.listen_global("ACTION", |event| {
+                let action = Action::from_str(event.payload().unwrap()).unwrap();
+                match action {
+                    Action::Play => {
+                        println!("play")
+                    },
+                    Action::Tick => {
+                        println!("tick")
+                    },
+                    Action::Stop => {
+                        println!("stop")
+                    },
+                    Action::Done => {
+                        println!("done")
+                    },
+                }
+            });
+
+            Ok(())
+        })
+        .manage(Store { timer: Mutex::new(now), playing: Mutex::new(false) })
         .invoke_handler(tauri::generate_handler![play, current])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
